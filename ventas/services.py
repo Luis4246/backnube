@@ -11,7 +11,7 @@ def registrar_evento(user_id, evento, descripcion='', metadata=None):
         region_name='us-east-1'
     )
 
-    tabla = dynamodb.Table('EventosUsuarios')
+    tabla = dynamodb.Table('EventosUsuario')
 
     timestamp = datetime.utcnow().isoformat()
 
