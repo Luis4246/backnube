@@ -17,7 +17,7 @@ def registrar_evento(user_id, evento, descripcion='', metadata=None):
 
     item = {
         'userId': str(user_id),
-        'timestamp': timestamp,
+        'Timestamp': timestamp,
         'evento': evento,
         'descripcion': descripcion,
         'metadata': metadata or {}
