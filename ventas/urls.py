@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     ClienteAPIView,
+    ProductoAPIView,
     PedidoAPIView,
     EventosUsuarioAPIView,
     RegistrarEventoAPIView,
@@ -14,6 +15,7 @@ urlpatterns = [
     path('perfil/', PerfilUsuarioAPIView.as_view(), name='perfil'),
 
     path('clientes/', ClienteAPIView.as_view(), name='clientes'),
+    path('productos/', ProductoAPIView.as_view(), name='productos'),
     path('pedidos/', PedidoAPIView.as_view(), name='pedidos'),
 
     path('eventos/', RegistrarEventoAPIView.as_view(), name='registrar_evento'),

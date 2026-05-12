@@ -8,9 +8,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 
-from .models import Cliente, Pedido
+from .models import Cliente, Producto, Pedido
 from .serializers import (
     ClienteSerializer,
+    ProductoSerializer,
     PedidoSerializer,
     CrearPedidoSerializer
 )
@@ -105,6 +106,45 @@ class ClienteAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class ProductoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        productos = Producto.objects.all().order_by('id')
+        serializer = ProductoSerializer(productos, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        if not request.user.is_staff:
+            return Response(
+                {'error': 'Solo el operador puede crear productos.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = ProductoSerializer(data=request.data)
+
+        if serializer.is_valid():
+            producto = serializer.save()
+
+            registrar_evento(
+                user_id=request.user.id,
+                evento='CREAR_PRODUCTO',
+                descripcion=f'Se creó el producto {producto.nombre}',
+                metadata={
+                    'producto_id': producto.id,
+                    'precio': str(producto.precio),
+                    'stock': producto.stock
+                }
+            )
+
+            return Response(
+                ProductoSerializer(producto).data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 class PedidoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -145,7 +185,8 @@ class PedidoAPIView(APIView):
                     evento='CREAR_PEDIDO',
                     descripcion=f'Se creó el pedido {pedido.id}',
                     metadata={
-                        'pedido_id': pedido.id
+                        'pedido_id': pedido.id,
+                        'cliente_id': cliente_id
                     }
                 )
 
