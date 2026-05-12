@@ -1,14 +1,21 @@
 from django.urls import path
+
 from .views import (
     ClienteAPIView,
     PedidoAPIView,
     EventosUsuarioAPIView,
-    RegistrarEventoAPIView
+    RegistrarEventoAPIView,
+    RegistroUsuarioAPIView,
+    PerfilUsuarioAPIView
 )
 
 urlpatterns = [
+    path('register/', RegistroUsuarioAPIView.as_view(), name='register'),
+    path('perfil/', PerfilUsuarioAPIView.as_view(), name='perfil'),
+
     path('clientes/', ClienteAPIView.as_view(), name='clientes'),
     path('pedidos/', PedidoAPIView.as_view(), name='pedidos'),
-    path('eventos/<str:user_id>/', EventosUsuarioAPIView.as_view(), name='eventos_usuario'),
+
     path('eventos/', RegistrarEventoAPIView.as_view(), name='registrar_evento'),
+    path('eventos/<str:user_id>/', EventosUsuarioAPIView.as_view(), name='eventos_usuario'),
 ]
