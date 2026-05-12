@@ -1,8 +1,11 @@
 import boto3
 from datetime import datetime
 from decimal import Decimal
+
 from django.db import transaction
-from .models import Cliente, Pedido, DetallePedido
+from django.core.mail import send_mail
+
+from .models import Cliente, Producto, Pedido, DetallePedido
 
 
 def registrar_evento(user_id, evento, descripcion='', metadata=None):
@@ -28,43 +31,101 @@ def registrar_evento(user_id, evento, descripcion='', metadata=None):
     return item
 
 
+def enviar_correo_confirmacion_pedido(pedido):
+    asunto = f'Confirmación de pedido #{pedido.id}'
+
+    mensaje = f"""
+Hola {pedido.cliente.nombre},
+
+Tu pedido fue registrado correctamente.
+
+Número de pedido: {pedido.id}
+Estado: {pedido.estado}
+Total: {pedido.total}
+
+Detalle del pedido:
+"""
+
+    for detalle in pedido.detalles.all():
+        mensaje += (
+            f"\n- {detalle.producto.nombre} "
+            f"x {detalle.cantidad} "
+            f"= {detalle.subtotal}"
+        )
+
+    mensaje += "\n\nGracias por tu compra."
+
+    send_mail(
+        asunto,
+        mensaje,
+        None,
+        [pedido.cliente.email],
+        fail_silently=False
+    )
+
+
 @transaction.atomic
-def crear_pedido_con_detalles(cliente_id, detalles):
-    cliente = Cliente.objects.get(id=cliente_id)
+def crear_pedido_con_detalles(user, detalles):
+    if not user.email:
+        raise Exception('El usuario no tiene correo registrado.')
+
+    cliente, creado = Cliente.objects.get_or_create(
+        email=user.email,
+        defaults={
+            'nombre': user.username
+        }
+    )
 
     pedido = Pedido.objects.create(
         cliente=cliente,
-        total=0
+        total=Decimal('0.00'),
+        estado='pendiente'
     )
 
     total = Decimal('0.00')
 
     for detalle in detalles:
+        producto_id = detalle['producto']
         cantidad = detalle['cantidad']
-        precio_unitario = detalle['precio_unitario']
 
-        subtotal = cantidad * precio_unitario
+        producto = Producto.objects.get(id=producto_id)
+
+        if producto.stock < cantidad:
+            raise Exception(
+                f'No hay stock suficiente para el producto {producto.nombre}.'
+            )
+
+        precio_unitario = producto.precio
+        subtotal = precio_unitario * cantidad
         total += subtotal
 
         DetallePedido.objects.create(
             pedido=pedido,
-            producto=detalle['producto'],
+            producto=producto,
             cantidad=cantidad,
-            precio_unitario=precio_unitario
+            precio_unitario=precio_unitario,
+            subtotal=subtotal
         )
+
+        producto.stock -= cantidad
+        producto.save()
 
     pedido.total = total
     pedido.save()
 
     registrar_evento(
-        user_id=cliente.id,
+        user_id=user.id,
         evento='CREAR_PEDIDO',
-        descripcion=f'El cliente {cliente.nombre} creó el pedido #{pedido.id}',
+        descripcion=f'El usuario {user.username} creó el pedido #{pedido.id}',
         metadata={
             'pedido_id': pedido.id,
+            'cliente_id': cliente.id,
+            'cliente_email': cliente.email,
             'total': str(pedido.total),
             'cantidad_productos': len(detalles)
         }
     )
+
+    enviar_correo_confirmacion_pedido(pedido)
 
     return pedido

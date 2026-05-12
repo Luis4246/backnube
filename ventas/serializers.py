@@ -31,6 +31,7 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
 
 class PedidoSerializer(serializers.ModelSerializer):
     cliente_nombre = serializers.CharField(source='cliente.nombre', read_only=True)
+    cliente_email = serializers.CharField(source='cliente.email', read_only=True)
     detalles = DetallePedidoSerializer(many=True, read_only=True)
 
     class Meta:
@@ -39,6 +40,7 @@ class PedidoSerializer(serializers.ModelSerializer):
             'id',
             'cliente',
             'cliente_nombre',
+            'cliente_email',
             'fecha',
             'total',
             'estado',
@@ -48,9 +50,8 @@ class PedidoSerializer(serializers.ModelSerializer):
 
 class CrearDetallePedidoSerializer(serializers.Serializer):
     producto = serializers.IntegerField()
-    cantidad = serializers.IntegerField()
+    cantidad = serializers.IntegerField(min_value=1)
 
 
 class CrearPedidoSerializer(serializers.Serializer):
-    cliente = serializers.IntegerField()
     detalles = CrearDetallePedidoSerializer(many=True)

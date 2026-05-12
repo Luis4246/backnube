@@ -27,14 +27,10 @@ from .services import (
 )
 
 
-# =========================
-# REGISTRO USUARIO
-# =========================
 class RegistroUsuarioAPIView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-
         username = request.data.get('username')
         password = request.data.get('password')
         email = request.data.get('email', '')
@@ -46,9 +42,21 @@ class RegistroUsuarioAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        if not email:
+            return Response(
+                {'error': 'email es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         if User.objects.filter(username=username).exists():
             return Response(
                 {'error': 'El usuario ya existe.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {'error': 'Ya existe un usuario con ese email.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -58,7 +66,6 @@ class RegistroUsuarioAPIView(APIView):
             email=email
         )
 
-        # OPERADOR
         if rol == 'operador':
             user.is_staff = True
             user.save()
@@ -74,14 +81,10 @@ class RegistroUsuarioAPIView(APIView):
         )
 
 
-# =========================
-# PERFIL USUARIO
-# =========================
 class PerfilUsuarioAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-
         user = request.user
 
         return Response({
@@ -92,25 +95,18 @@ class PerfilUsuarioAPIView(APIView):
         })
 
 
-# =========================
-# CLIENTES
-# =========================
 class ClienteAPIView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-
         clientes = Cliente.objects.all()
         serializer = ClienteSerializer(clientes, many=True)
-
         return Response(serializer.data)
 
     def post(self, request):
-
         serializer = ClienteSerializer(data=request.data)
 
         if serializer.is_valid():
-
             cliente = serializer.save()
 
             try:
@@ -123,7 +119,6 @@ class ClienteAPIView(APIView):
                         'email': cliente.email
                     }
                 )
-
             except Exception as e:
                 print("Error DynamoDB:", e)
 
@@ -138,22 +133,15 @@ class ClienteAPIView(APIView):
         )
 
 
-# =========================
-# PRODUCTOS
-# =========================
 class ProductoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-
         productos = Producto.objects.all().order_by('id')
         serializer = ProductoSerializer(productos, many=True)
-
         return Response(serializer.data)
 
     def post(self, request):
-
-        # SOLO OPERADOR
         if not request.user.is_staff:
             return Response(
                 {'error': 'Solo el operador puede crear productos.'},
@@ -162,13 +150,9 @@ class ProductoAPIView(APIView):
 
         serializer = ProductoSerializer(data=request.data)
 
-        # VALIDAR
         if serializer.is_valid():
-
-            # GUARDAR MYSQL
             producto = serializer.save()
 
-            # EVENTO DYNAMODB
             try:
                 registrar_evento(
                     user_id=request.user.id,
@@ -180,7 +164,6 @@ class ProductoAPIView(APIView):
                         'stock': producto.stock
                     }
                 )
-
             except Exception as e:
                 print("Error registrando evento DynamoDB:", e)
 
@@ -198,87 +181,47 @@ class ProductoAPIView(APIView):
         )
 
 
-# =========================
-# PEDIDOS
-# =========================
 class PedidoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-
         user = request.user
 
-        # OPERADOR VE TODOS
         if user.is_staff:
             pedidos = Pedido.objects.all().order_by('-fecha')
-
-        # CLIENTE SOLO SUS PEDIDOS
         else:
             pedidos = Pedido.objects.filter(
                 cliente__email=user.email
             ).order_by('-fecha')
 
         serializer = PedidoSerializer(pedidos, many=True)
-
         return Response(serializer.data)
 
     def post(self, request):
-
         serializer = CrearPedidoSerializer(data=request.data)
 
         if serializer.is_valid():
-
             try:
-                cliente_id = serializer.validated_data['cliente']
-
-                # VALIDAR CLIENTE
-                if not request.user.is_staff:
-
-                    cliente = Cliente.objects.get(id=cliente_id)
-
-                    if cliente.email != request.user.email:
-                        return Response(
-                            {
-                                'error': 'No puedes crear pedidos para otro cliente.'
-                            },
-                            status=status.HTTP_403_FORBIDDEN
-                        )
-
-                # CREAR PEDIDO
                 pedido = crear_pedido_con_detalles(
-                    cliente_id=cliente_id,
+                    user=request.user,
                     detalles=serializer.validated_data['detalles']
                 )
 
-                # EVENTO DYNAMODB
-                try:
-                    registrar_evento(
-                        user_id=request.user.id,
-                        evento='CREAR_PEDIDO',
-                        descripcion=f'Se creó el pedido {pedido.id}',
-                        metadata={
-                            'pedido_id': pedido.id,
-                            'cliente_id': cliente_id
-                        }
-                    )
-
-                except Exception as e:
-                    print("Error DynamoDB:", e)
-
                 return Response(
-                    PedidoSerializer(pedido).data,
+                    {
+                        'mensaje': 'Pedido creado correctamente.',
+                        'pedido': PedidoSerializer(pedido).data
+                    },
                     status=status.HTTP_201_CREATED
                 )
 
-            except Cliente.DoesNotExist:
-
+            except Producto.DoesNotExist:
                 return Response(
-                    {'error': 'El cliente no existe.'},
+                    {'error': 'Uno de los productos no existe.'},
                     status=status.HTTP_404_NOT_FOUND
                 )
 
             except Exception as e:
-
                 return Response(
                     {'error': str(e)},
                     status=status.HTTP_400_BAD_REQUEST
@@ -290,24 +233,17 @@ class PedidoAPIView(APIView):
         )
 
 
-# =========================
-# EVENTOS USUARIO
-# =========================
 class EventosUsuarioAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, user_id):
-
         try:
-
             if (
                 not request.user.is_staff and
                 str(request.user.id) != str(user_id)
             ):
                 return Response(
-                    {
-                        'error': 'No tienes permiso para ver estos eventos.'
-                    },
+                    {'error': 'No tienes permiso para ver estos eventos.'},
                     status=status.HTTP_403_FORBIDDEN
                 )
 
@@ -326,21 +262,16 @@ class EventosUsuarioAPIView(APIView):
             return Response(response.get('Items', []))
 
         except Exception as e:
-
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
 
-# =========================
-# REGISTRAR EVENTO
-# =========================
 class RegistrarEventoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-
         user_id = request.data.get(
             'userId',
             request.user.id
@@ -355,9 +286,7 @@ class RegistrarEventoAPIView(APIView):
             str(user_id) != str(request.user.id)
         ):
             return Response(
-                {
-                    'error': 'No puedes registrar eventos para otro usuario.'
-                },
+                {'error': 'No puedes registrar eventos para otro usuario.'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -368,7 +297,6 @@ class RegistrarEventoAPIView(APIView):
             )
 
         try:
-
             item = registrar_evento(
                 user_id=user_id,
                 evento=evento,
@@ -385,7 +313,6 @@ class RegistrarEventoAPIView(APIView):
             )
 
         except Exception as e:
-
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
