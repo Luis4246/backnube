@@ -1,89 +1,70 @@
 import boto3
-
 from datetime import datetime
-
+from decimal import Decimal
 from django.db import transaction
-
-from .models import (
-    Cliente,
-    Pedido,
-    DetallePedido
-)
+from .models import Cliente, Pedido, DetallePedido
 
 
-def registrar_evento(
-    user_id,
-    evento,
-    descripcion,
-    ip='127.0.0.1'
-):
-
+def registrar_evento(user_id, evento, descripcion='', metadata=None):
     dynamodb = boto3.resource(
         'dynamodb',
         region_name='us-east-1'
     )
 
-    tabla = dynamodb.Table(
-        'EventosUsuarios'
-    )
+    tabla = dynamodb.Table('EventosUsuarios')
 
-    tabla.put_item(
-        Item={
+    timestamp = datetime.utcnow().isoformat()
 
-            'userId': str(user_id),
+    item = {
+        'userId': str(user_id),
+        'timestamp': timestamp,
+        'evento': evento,
+        'descripcion': descripcion,
+        'metadata': metadata or {}
+    }
 
-            'timestamp': datetime.now().isoformat(),
+    tabla.put_item(Item=item)
 
-            'evento': evento,
-
-            'descripcion': descripcion,
-
-            'ip': ip
-        }
-    )
+    return item
 
 
 @transaction.atomic
-def crear_pedido_con_detalles(
-    data,
-    ip='127.0.0.1'
-):
-
-    cliente = Cliente.objects.get(
-        id=data['cliente']
-    )
+def crear_pedido_con_detalles(cliente_id, detalles):
+    cliente = Cliente.objects.get(id=cliente_id)
 
     pedido = Pedido.objects.create(
-        cliente=cliente
+        cliente=cliente,
+        total=0
     )
 
-    detalles = data.get(
-        'detalles',
-        []
-    )
+    total = Decimal('0.00')
 
-    for item in detalles:
+    for detalle in detalles:
+        cantidad = detalle['cantidad']
+        precio_unitario = detalle['precio_unitario']
+
+        subtotal = cantidad * precio_unitario
+        total += subtotal
 
         DetallePedido.objects.create(
-
             pedido=pedido,
-
-            producto=item['producto'],
-
-            cantidad=item['cantidad'],
-
-            precio_unitario=item['precio_unitario']
+            producto=detalle['producto'],
+            cantidad=cantidad,
+            precio_unitario=precio_unitario
         )
 
+    pedido.total = total
+    pedido.save()
+
     registrar_evento(
-
         user_id=cliente.id,
-
         evento='CREAR_PEDIDO',
-
-        descripcion=f'Pedido {pedido.id} creado correctamente',
-
-        ip=ip
+        descripcion=f'El cliente {cliente.nombre} creó el pedido #{pedido.id}',
+        metadata={
+            'pedido_id': pedido.id,
+            'total': str(pedido.total),
+            'cantidad_productos': len(detalles)
+        }
     )
 
     return pedido
