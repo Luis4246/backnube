@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     ClienteAPIView,
     ProductoAPIView,
+    ProductoDetalleAPIView,
     PedidoAPIView,
     EventosUsuarioAPIView,
     RegistrarEventoAPIView,
@@ -16,6 +17,9 @@ urlpatterns = [
 
     path('clientes/', ClienteAPIView.as_view(), name='clientes'),
     path('productos/', ProductoAPIView.as_view(), name='productos'),
+
+    path('productos/<int:producto_id>/', ProductoDetalleAPIView.as_view(), name='producto_detalle'),
+
     path('pedidos/', PedidoAPIView.as_view(), name='pedidos'),
 
     path('eventos/', RegistrarEventoAPIView.as_view(), name='registrar_evento'),

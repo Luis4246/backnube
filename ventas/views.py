@@ -181,6 +181,46 @@ class ProductoAPIView(APIView):
         )
 
 
+class ProductoDetalleAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, producto_id):
+        if not request.user.is_staff:
+            return Response(
+                {'error': 'Solo el operador puede eliminar productos.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            producto = Producto.objects.get(id=producto_id)
+            nombre_producto = producto.nombre
+
+            producto.delete()
+
+            try:
+                registrar_evento(
+                    user_id=request.user.id,
+                    evento='ELIMINAR_PRODUCTO',
+                    descripcion=f'Se eliminó el producto {nombre_producto}',
+                    metadata={
+                        'producto_id': producto_id
+                    }
+                )
+            except Exception as e:
+                print("Error registrando evento DynamoDB:", e)
+
+            return Response(
+                {'mensaje': 'Producto eliminado correctamente.'},
+                status=status.HTTP_200_OK
+            )
+
+        except Producto.DoesNotExist:
+            return Response(
+                {'error': 'Producto no encontrado.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
 class PedidoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
