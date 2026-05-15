@@ -1,5 +1,5 @@
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Key,Attr
 
 from django.contrib.auth.models import User
 
@@ -357,3 +357,55 @@ class RegistrarEventoAPIView(APIView):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        
+class EventosDynamoAPIView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        try:
+            evento = request.GET.get('evento')
+            user_id = request.GET.get('userId')
+
+            dynamodb = boto3.resource(
+                'dynamodb',
+                region_name='us-east-1'
+            )
+
+            tabla = dynamodb.Table('EventosUsuario')
+
+            filter_expression = None
+
+            if evento:
+                filter_expression = Attr('evento').eq(evento)
+
+            if user_id:
+                filtro_user = Attr('userId').eq(str(user_id))
+
+                if filter_expression is None:
+                    filter_expression = filtro_user
+                else:
+                    filter_expression = filter_expression & filtro_user
+
+            if filter_expression:
+                response = tabla.scan(
+                    FilterExpression=filter_expression
+                )
+            else:
+                response = tabla.scan()
+
+            eventos = response.get('Items', [])
+
+            eventos = sorted(
+                eventos,
+                key=lambda x: x.get('Timestamp', ''),
+                reverse=True
+            )
+
+            return Response(eventos)
+
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )     

@@ -7,6 +7,7 @@ from .views import (
     PedidoAPIView,
     EventosUsuarioAPIView,
     RegistrarEventoAPIView,
+    EventosDynamoAPIView,
     RegistroUsuarioAPIView,
     PerfilUsuarioAPIView
 )
@@ -21,6 +22,8 @@ urlpatterns = [
     path('productos/<int:producto_id>/', ProductoDetalleAPIView.as_view(), name='producto_detalle'),
 
     path('pedidos/', PedidoAPIView.as_view(), name='pedidos'),
+
+    path('eventos-dynamo/', EventosDynamoAPIView.as_view(), name='eventos_dynamo'),
 
     path('eventos/', RegistrarEventoAPIView.as_view(), name='registrar_evento'),
     path('eventos/<str:user_id>/', EventosUsuarioAPIView.as_view(), name='eventos_usuario'),
